@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "SplitCard",
+    "slug": "splitcard-mobile",
+    "scheme": "splitcard",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router", "expo-secure-store"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.splitcard.mobile"
+    },
+    "android": {
+      "package": "com.splitcard.mobile"
+    }
+  }
+}
