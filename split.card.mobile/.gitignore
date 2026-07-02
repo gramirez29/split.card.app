@@ -4,3 +4,4 @@ dist/
 web-build/
 *.log
 .env
+expo-env.d.ts
