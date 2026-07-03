@@ -8,10 +8,12 @@ SplitCard mobile app: register purchases at the moment they happen, track instal
 
 ## Stack
 
-- Expo (SDK ~52) + Expo Router (file-based routing)
+- Expo (SDK 54) + Expo Router ~6 (file-based routing)
+- React 19.1.0 / React Native 0.81.5 — `react` must exactly match the `react-native-renderer` version RN 0.81.5 bundles (19.1.0); a newer `react` (e.g. 19.2.x, pulled in to satisfy `react-dom`'s peer range) throws "Incompatible React versions" at runtime. `react-dom` is pinned to the same 19.1.0 for consistency, even though this app doesn't target web. `@expo/vector-icons` and `babel-preset-expo` must both be explicit dependencies on SDK 54 (no longer resolved transitively) — Metro fails at bundle time with "Cannot find module" if either is missing, even though `tsc`/`eslint` pass clean.
 - Strict TypeScript (`strict: true`, `noUncheckedIndexedAccess: true`)
 - Zustand for global state
 - `expo-secure-store` for the JWT (never in persisted Zustand state or unencrypted AsyncStorage)
+- `react-native-paper` (v5, Material Design 3) for UI components — themed via `src/constants/theme.ts`, provider wired in `app/_layout.tsx`. Icons via `@expo/vector-icons` (`MaterialCommunityIcons`), not `react-native-vector-icons`.
 
 ## Structure
 
@@ -33,7 +35,9 @@ src/
   store/                       authStore, cardsStore, offlineQueueStore
   types/                       Mirror of the backend entities
   hooks/useAuth.ts
+  screens/                     Screen implementations (route files in app/ re-export from here)
   constants/config.ts          Reads EXPO_PUBLIC_API_URL
+  constants/theme.ts           MD3 theme for react-native-paper
   utils/                       currency.ts, date.ts
 ```
 
