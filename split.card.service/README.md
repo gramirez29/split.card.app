@@ -1,14 +1,6 @@
-# SplitCard
+# split.card.service
 
-Backend .NET 9 (Clean Architecture) + MongoDB para SplitCard. Ver `SplitCard.md` (documento del proyecto) para el contexto completo de dominio, permisos y funcionalidades.
-
-## Ubicación
-
-Este proyecto vive en:
-
-```
-D:\Repositories\Applications\split.card\split.card.service
-```
+Backend .NET 9 (Clean Architecture) + MongoDB + Minimal API para SplitCard. Ver `claude.md` en este mismo repo para arquitectura, convenciones y estado real del proyecto — es la fuente de verdad, este README solo cubre el setup local.
 
 ## Estructura
 
@@ -16,69 +8,57 @@ D:\Repositories\Applications\split.card\split.card.service
 split.card.service/
   SplitCard.sln
   Dockerfile
+  docker-compose.yml           Mongo local dedicado a este proyecto (puerto 27018).
   railway.json
   src/
-    Split.Card.Domain/          -> Entidades, enums, value objects. Cero dependencias externas.
-    Split.Card.Application/     -> Interfaces de repositorio (abstracciones). Depende solo de Domain.
-    Split.Card.Infrastructure/  -> Implementación MongoDB (documentos, mappings, repositorios, DI).
-    Split.Card.Api/             -> Program.cs, JWT, health check.
+    Split.Card.Domain/          Entidades, enums, value objects. Cero dependencias externas.
+    Split.Card.Application/     Commands/Queries/Handlers + interfaces de repositorio.
+    Split.Card.Infrastructure/  MongoDB (documentos, mappings, repositorios, DI, password hashing).
+    Split.Card.Api/             Program.cs, Minimal API endpoints, Swagger, JWT, health check.
+  tests/
+    Split.Card.Domain.Tests/
+    Split.Card.Application.Tests/
 ```
+
+## Base de datos local (Docker)
+
+`docker-compose.yml` en la raíz de este repo levanta un Mongo **dedicado a SplitCard**, separado de cualquier otro Mongo local que tengas para otros proyectos (puerto `27018`, no `27017`, justamente para no chocar). No reutilices el Mongo de otro proyecto acá — cada repo debe poder levantar su propia infraestructura sin depender de que otro repo esté corriendo.
+
+```bash
+cd split.card.service
+docker compose up -d
+```
+
+La base `split-card-dev-db` se crea sola al primer insert (comportamiento normal de Mongo, no hace falta crearla a mano). Para pararlo: `docker compose down` (agregá `-v` si además querés borrar el volumen y arrancar de cero).
 
 ## Variables de entorno requeridas
 
 | Variable | Descripción |
 |---|---|
-| `MONGODB_CONNECTION_STRING` | Connection string de Mongo Atlas (mismo cluster free tier, base de datos separada de la barbería) |
-| `MONGODB_DATABASE_NAME` | Nombre de la base de datos para SplitCard |
-| `JWT_SECRET` | Clave simétrica para firmar/validar tokens JWT |
+| `MONGODB_CONNECTION_STRING` | Local: `mongodb://splitcard:splitcard_dev_only@localhost:27018` (ver `docker-compose.yml`). Producción: connection string de Mongo Atlas. |
+| `MONGODB_DATABASE_NAME` | `split-card-dev-db` en local |
+| `JWT_SECRET` | Clave simétrica para firmar/validar tokens JWT (mín. 32 caracteres) |
 
-En local, se pueden definir en un archivo `.env` (no versionado) o exportarlas antes de correr:
+**En local**: copiá `src/Split.Card.Api/.env.example` a `src/Split.Card.Api/.env` y completá los valores reales. `Program.cs` carga ese archivo automáticamente al arrancar (vía `DotNetEnv`) — no hace falta exportarlas a mano en la terminal. `.env` está en `.gitignore` (patrón `*.env`), nunca se commitea.
 
-```bash
-export MONGODB_CONNECTION_STRING="mongodb+srv://..."
-export MONGODB_DATABASE_NAME="splitcard"
-export JWT_SECRET="una-clave-larga-y-aleatoria"
-```
-
-En Railway, se configuran como variables del servicio.
+**En Railway**: se configuran como variables del servicio directamente — no hay archivo `.env` en el contenedor, por lo que ese paso de carga es un no-op ahí.
 
 ## Cómo correrlo localmente
 
 ```bash
 cd split.card.service
+docker compose up -d                                          # Mongo local
+cp src/Split.Card.Api/.env.example src/Split.Card.Api/.env    # y completar valores reales
 dotnet restore
 dotnet build
 dotnet run --project src/Split.Card.Api
 ```
 
-Verificación de salud (incluye ping real a Mongo, no solo el proceso):
+Swagger UI: `http://localhost:{puerto}/swagger`
+Health check (ping real a Mongo, no solo el proceso vivo): `GET http://localhost:{puerto}/health`
 
+## Tests
+
+```bash
+dotnet test
 ```
-GET http://localhost:5000/health
-```
-
-## Nota importante — no compilado ni probado en este entorno
-
-Este esqueleto se generó en un sandbox sin acceso a red, por lo tanto:
-
-- No se ejecutó `dotnet restore` (no hay descarga de paquetes NuGet).
-- No se ejecutó `dotnet build` para verificar que compila.
-
-**Antes de dar por bueno el esqueleto, correr `dotnet build` localmente y corregir cualquier error de compilación que aparezca** (lo más probable: versiones exactas de paquetes NuGet que hayan cambiado).
-
-## Decisiones de diseño relevantes (resumen)
-
-- **IDs**: strings generados con `Guid.NewGuid().ToString("N")` (ver `SplitCard.Domain.Common.IdGenerator`), no `ObjectId` de Mongo. Mantiene Domain/Application 100% libres de dependencias de Mongo.
-- **DateOnly en Mongo**: el driver no lo serializa nativamente. Se registra un `DateOnlySerializer` custom (`SplitCard.Infrastructure.Persistence.Serializers`) que lo guarda como `DateTime` UTC a medianoche, para que los filtros `>=`/`<=` funcionen.
-- **Cuotas**: `InstallmentPlan` no genera un registro por mes. `GetInstallmentNumberFor()` calcula matemáticamente, a partir de `FirstChargeDate`, si una cuota está activa en un periodo dado.
-- **Cálculo de periodo de corte** (`Card.GetStatementPeriodFor`): es una primera versión heurística basada en día fijo de corte por mes, con clamp para meses cortos (ej. corte día 31 en febrero → día 28/29). **No validado contra casos reales de bancos costarricenses** — recomiendo escribir tests unitarios con las fechas de corte reales de tus 4 tarjetas antes de confiar en este cálculo para producción.
-- **Autorización por Split[].PersonId**: implementada en `MongoTransactionRepository.GetVisibleToUserAsync` vía `ElemMatch`, no a nivel de aplicación — así el filtro ocurre en la query de Mongo, nunca se trae de más para luego filtrar en memoria.
-
-## Pendiente para la siguiente fase (no incluido en este esqueleto)
-
-- Capa de Application "real": Commands/Queries/Handlers que orquesten los repositorios (hoy solo existen las interfaces).
-- Controllers de la API (hoy solo existe `/health`).
-- Autenticación: endpoint de login que emita el JWT (hoy solo está configurada la validación del token).
-- Generación de PDF de conciliación (QuestPDF).
-- Lógica de negocio para "sugerir split por SplitRule" al registrar una transacción.
-- App móvil (React Native + Expo).
