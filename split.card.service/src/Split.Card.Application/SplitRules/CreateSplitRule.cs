@@ -20,6 +20,8 @@ public sealed class CreateSplitRuleCommandHandler(IUserRepository userRepository
         var actingUser = await userRepository.GetByIdAsync(command.ActingUserId, cancellationToken)
             ?? throw new NotFoundException($"User {command.ActingUserId} not found.");
 
+        HouseholdAccessGuard.EnsureMember(actingUser, command.HouseholdId);
+
         if (actingUser.Role != UserRole.Owner)
         {
             throw new ForbiddenException("Only the household Owner can create split rules.");

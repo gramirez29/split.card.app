@@ -42,10 +42,11 @@ public static class CardEndpoints
             .WithTags("Cards")
             .MapGet("/", async (
                 string householdId,
+                ClaimsPrincipal actingUser,
                 GetCardsForHouseholdQueryHandler handler,
                 CancellationToken cancellationToken) =>
             {
-                var query = new GetCardsForHouseholdQuery(householdId);
+                var query = new GetCardsForHouseholdQuery(householdId, actingUser.GetUserId());
                 var cards = await handler.Handle(query, cancellationToken);
 
                 return Results.Ok(cards.Select(CardResponse.FromDomain).ToList());
@@ -53,6 +54,7 @@ public static class CardEndpoints
             .WithName("GetCardsForHousehold")
             .WithSummary("Lists every card registered for a household.")
             .Produces<List<CardResponse>>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .RequireAuthorization();
 
         return app;

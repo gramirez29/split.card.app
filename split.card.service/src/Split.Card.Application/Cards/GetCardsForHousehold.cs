@@ -1,16 +1,20 @@
 using SplitCard.Application.Abstractions;
+using SplitCard.Application.Common;
 using SplitCard.Domain.Entities;
 
 namespace SplitCard.Application.Cards;
 
-public sealed record GetCardsForHouseholdQuery(string HouseholdId);
+public sealed record GetCardsForHouseholdQuery(string HouseholdId, string ActingUserId);
 
-/// <summary>
-/// No per-role filtering here: every household member can see the list of cards
-/// (name/bank/cutoff), only Transaction visibility is restricted by Split[].PersonId.
-/// </summary>
-public sealed class GetCardsForHouseholdQueryHandler(ICardRepository cardRepository)
+public sealed class GetCardsForHouseholdQueryHandler(ICardRepository cardRepository, IUserRepository userRepository)
 {
-    public Task<IReadOnlyList<Card>> Handle(GetCardsForHouseholdQuery query, CancellationToken cancellationToken) =>
-        cardRepository.GetByHouseholdIdAsync(query.HouseholdId, cancellationToken);
+    public async Task<IReadOnlyList<Card>> Handle(GetCardsForHouseholdQuery query, CancellationToken cancellationToken)
+    {
+        var actingUser = await userRepository.GetByIdAsync(query.ActingUserId, cancellationToken)
+            ?? throw new NotFoundException($"User {query.ActingUserId} not found.");
+
+        HouseholdAccessGuard.EnsureMember(actingUser, query.HouseholdId);
+
+        return await cardRepository.GetByHouseholdIdAsync(query.HouseholdId, cancellationToken);
+    }
 }

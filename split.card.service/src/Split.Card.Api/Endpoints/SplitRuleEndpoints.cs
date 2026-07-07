@@ -40,10 +40,11 @@ public static class SplitRuleEndpoints
 
         householdGroup.MapGet("/", async (
             string householdId,
+            ClaimsPrincipal actingUser,
             GetSplitRulesForHouseholdQueryHandler handler,
             CancellationToken cancellationToken) =>
         {
-            var query = new GetSplitRulesForHouseholdQuery(householdId);
+            var query = new GetSplitRulesForHouseholdQuery(householdId, actingUser.GetUserId());
             var rules = await handler.Handle(query, cancellationToken);
 
             return Results.Ok(rules.Select(SplitRuleResponse.FromDomain).ToList());
@@ -51,15 +52,17 @@ public static class SplitRuleEndpoints
         .WithName("GetSplitRulesForHousehold")
         .WithSummary("Lists every split rule configured for a household.")
         .Produces<List<SplitRuleResponse>>()
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .RequireAuthorization();
 
         householdGroup.MapGet("/suggest", async (
             string householdId,
             string merchant,
+            ClaimsPrincipal actingUser,
             SuggestSplitForMerchantQueryHandler handler,
             CancellationToken cancellationToken) =>
         {
-            var query = new SuggestSplitForMerchantQuery(householdId, merchant);
+            var query = new SuggestSplitForMerchantQuery(householdId, merchant, actingUser.GetUserId());
             var suggestedSplit = await handler.Handle(query, cancellationToken);
 
             return suggestedSplit is null
@@ -70,6 +73,7 @@ public static class SplitRuleEndpoints
         .WithSummary("Suggests a default split for a merchant name, based on existing SplitRules. 204 if no rule matches.")
         .Produces<List<PersonShareResponse>>()
         .Produces(StatusCodes.Status204NoContent)
+        .ProducesProblem(StatusCodes.Status403Forbidden)
         .RequireAuthorization();
 
         return app;

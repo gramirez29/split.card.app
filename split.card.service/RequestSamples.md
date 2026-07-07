@@ -108,6 +108,31 @@ Response `201 Created`:
 }
 ```
 
+### GET /api/households/{householdId}/members
+**Auth: Bearer**
+
+Sin body. Lista todos los miembros del hogar (Owner + Contributor + RestrictedViewer) — pensado para poblar el picker de split en mobile (elegir entre qué personas repartir una compra).
+
+Response `200 OK`:
+```json
+[
+  {
+    "id": "m3n4o5p6q7r8s9t0u1v2w3x4",
+    "householdId": "a1b2c3d4e5f6g7h8i9j0k1l2",
+    "name": "Carlos Rodríguez",
+    "email": "carlos@example.com",
+    "role": "Owner"
+  },
+  {
+    "id": "y5z6a7b8c9d0e1f2g3h4i5j6",
+    "householdId": "a1b2c3d4e5f6g7h8i9j0k1l2",
+    "name": "María Rodríguez",
+    "email": "maria@example.com",
+    "role": "Contributor"
+  }
+]
+```
+
 ---
 
 ## Cards
@@ -242,6 +267,8 @@ Response `400 Bad Request`:
 }
 ```
 
+`cardId` de una tarjeta que pertenece a **otro household** que no es el tuyo → `403` (ver `HouseholdAccessGuard` al final de este documento).
+
 Response `201 Created` (para el request válido de arriba):
 ```json
 {
@@ -283,6 +310,32 @@ Response `404 Not Found` si no existe un `StatementPeriod` que contenga esa fech
   "detail": "No statement period found for card k7l8m9n0o1p2q3r4s5t6u7v8 on 2026-03-15."
 }
 ```
+
+---
+
+## Reconciliation
+
+### GET /api/cards/{cardId}/statement-pdf?date=2026-03-15
+**Auth: Bearer**
+
+Query param `date` (formato `yyyy-MM-dd`) — igual que `GET /api/cards/{cardId}/transactions`, resuelve el `StatementPeriod` que contiene esa fecha. Genera un PDF (QuestPDF) con el detalle de transacciones de ese periodo para conciliar contra el estado de cuenta real del banco.
+
+Sin body.
+
+Response `200 OK`: binario `application/pdf`, descarga como `statement-{cardId}-{date}.pdf`. Contenido: nombre/banco/tipo de tarjeta, fechas del periodo (corte y pago), tabla de transacciones (comercio, fecha, monto formateado por moneda, split con **nombres** de personas — no ids crudos), y el total sumado por moneda al pie.
+
+Mismo filtro de visibilidad que las demás rutas de transacciones: Owner ve el periodo completo, Contributor/RestrictedViewer solo las líneas donde aparecen en `split`.
+
+Response `404 Not Found` (mismo caso que `GET /api/cards/{cardId}/transactions` — no hay `StatementPeriod` para esa fecha):
+```json
+{
+  "title": "Resource not found",
+  "status": 404,
+  "detail": "No statement period found for card k7l8m9n0o1p2q3r4s5t6u7v8 on 2026-03-15."
+}
+```
+
+Response `403 Forbidden` si `cardId` pertenece a otro household (ver `HouseholdAccessGuard` al final de este documento).
 
 ---
 
@@ -358,7 +411,21 @@ Response `204 No Content` (no hay ninguna regla que matchee — body vacío).
 |---|---|---|
 | `UnauthorizedException` | 401 | Login con credenciales inválidas |
 | `NotFoundException` | 404 | Household/User/Card/StatementPeriod referenciado no existe |
-| `ForbiddenException` | 403 | El usuario autenticado no tiene el rol requerido para la acción |
+| `ForbiddenException` | 403 | El usuario autenticado no tiene el rol requerido para la acción, **o** el recurso (`householdId`/`cardId`) no pertenece a su propio household (`HouseholdAccessGuard` — ver nota abajo) |
 | `ApplicationValidationException` | 400 | Email duplicado, invitar a un segundo Owner, cuotas en tarjeta Debit, etc. |
 | `DomainException` | 400 | Invariante de dominio violado (ej. `split` no suma 100) |
 | (sin manejar) | 500 | Bug — se loguea server-side, no se expone el detalle real al cliente |
+
+### HouseholdAccessGuard
+
+Todo endpoint con alcance de household (`{householdId}` en la ruta, o un `cardId` que resuelve a uno vía la tarjeta) verifica que el usuario autenticado pertenezca a **ese** household exacto — no solo que tenga el rol correcto. Si no coincide, `403`:
+
+```json
+{
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "You do not have access to this household."
+}
+```
+
+Esto aplica **aunque el usuario sea Owner** — de su propio household, no de cualquiera. Antes de este chequeo, un Owner podía leer/escribir datos de un household ajeno con solo mandar otro `householdId`/`cardId` — corregido en todos los endpoints que tocan `households`, `cards`, `transactions`, `split-rules` y `reconciliation`.

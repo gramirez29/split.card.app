@@ -167,3 +167,39 @@ public sealed class InMemoryTransactionRepository : ITransactionRepository
         return Task.CompletedTask;
     }
 }
+
+public sealed class InMemoryHouseholdRepository : IHouseholdRepository
+{
+    private readonly Dictionary<string, Household> _households = [];
+
+    public void Seed(Household household) => _households[household.Id] = household;
+
+    public Task<Household?> GetByIdAsync(string id, CancellationToken cancellationToken) =>
+        Task.FromResult(_households.GetValueOrDefault(id));
+
+    public Task AddAsync(Household household, CancellationToken cancellationToken)
+    {
+        _households[household.Id] = household;
+        return Task.CompletedTask;
+    }
+
+    public Task UpdateAsync(Household household, CancellationToken cancellationToken)
+    {
+        _households[household.Id] = household;
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class InMemorySplitRuleRepository : ISplitRuleRepository
+{
+    public readonly List<SplitRule> Rules = [];
+
+    public Task<IReadOnlyList<SplitRule>> GetByHouseholdIdAsync(string householdId, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<SplitRule>>(Rules.Where(r => r.HouseholdId == householdId).ToList());
+
+    public Task AddAsync(SplitRule splitRule, CancellationToken cancellationToken)
+    {
+        Rules.Add(splitRule);
+        return Task.CompletedTask;
+    }
+}

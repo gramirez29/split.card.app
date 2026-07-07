@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson.Serialization;
 using SplitCard.Application.Abstractions;
+using SplitCard.Infrastructure.Documents;
 using SplitCard.Infrastructure.Persistence;
 using SplitCard.Infrastructure.Persistence.Serializers;
 using SplitCard.Infrastructure.Repositories;
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.AddSingleton<ITokenGenerator, JwtTokenGenerator>();
 
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+
+        services.AddSingleton<IStatementPdfGenerator, QuestPdfStatementGenerator>();
 
         services.AddScoped<IHouseholdRepository, MongoHouseholdRepository>();
         services.AddScoped<IUserRepository, MongoUserRepository>();

@@ -1,27 +1,25 @@
 using SplitCard.Application.Abstractions;
 using SplitCard.Application.Common;
-using SplitCard.Domain.Entities;
 
-namespace SplitCard.Application.Transactions;
+namespace SplitCard.Application.Reconciliation;
 
-public sealed record GetTransactionsForCardPeriodQuery(string CardId, DateOnly Date, string ActingUserId);
+public sealed record GenerateStatementPdfQuery(string CardId, DateOnly Date, string ActingUserId);
 
 /// <summary>
-/// Backs the mobile "card detail" screen (currently a placeholder in split.card.mobile).
-/// Loads the Card to enforce HouseholdAccessGuard (this query is keyed by CardId, not
-/// HouseholdId, so the guard needs the Card's HouseholdId — it wasn't loaded here before
-/// this check existed, which is exactly why the leak was possible). Then resolves the
-/// StatementPeriod containing Date and applies the same Split[].PersonId visibility rule
-/// as GetVisibleTransactionsQuery — the Owner sees the full period, everyone else only
-/// their own share.
+/// Reuses the exact same guard + visibility logic as GetTransactionsForCardPeriodQuery
+/// (household membership via the loaded Card, then Split[].PersonId filtering for
+/// non-Owners) before handing the data to IStatementPdfGenerator. Also resolves
+/// PersonId -> Name for every household member so the PDF shows names, not raw ids —
+/// a reconciliation document with bare ids is useless to a human.
 /// </summary>
-public sealed class GetTransactionsForCardPeriodQueryHandler(
+public sealed class GenerateStatementPdfQueryHandler(
     IUserRepository userRepository,
     ICardRepository cardRepository,
     IStatementPeriodRepository statementPeriodRepository,
-    ITransactionRepository transactionRepository)
+    ITransactionRepository transactionRepository,
+    IStatementPdfGenerator pdfGenerator)
 {
-    public async Task<IReadOnlyList<Transaction>> Handle(GetTransactionsForCardPeriodQuery query, CancellationToken cancellationToken)
+    public async Task<byte[]> Handle(GenerateStatementPdfQuery query, CancellationToken cancellationToken)
     {
         var actingUser = await userRepository.GetByIdAsync(query.ActingUserId, cancellationToken)
             ?? throw new NotFoundException($"User {query.ActingUserId} not found.");
@@ -40,8 +38,15 @@ public sealed class GetTransactionsForCardPeriodQueryHandler(
             period.EndDate,
             cancellationToken);
 
-        return actingUser.CanReadAll()
+        var visibleTransactions = actingUser.CanReadAll()
             ? transactions
             : transactions.Where(t => t.IsVisibleTo(query.ActingUserId)).ToList();
+
+        var members = await userRepository.GetByHouseholdIdAsync(card.HouseholdId, cancellationToken);
+        var personNamesById = members.ToDictionary(m => m.Id, m => m.Name);
+
+        var model = new StatementPdfModel(card, period, visibleTransactions, personNamesById);
+
+        return pdfGenerator.Generate(model);
     }
 }
