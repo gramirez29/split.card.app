@@ -130,6 +130,12 @@ public sealed class InMemoryTransactionRepository : ITransactionRepository
         return Task.FromResult<IReadOnlyList<Transaction>>(results);
     }
 
+    public Task<IReadOnlyList<Transaction>> GetByCardIdAsync(string cardId, CancellationToken cancellationToken)
+    {
+        var results = Transactions.Where(t => t.CardId == cardId).ToList();
+        return Task.FromResult<IReadOnlyList<Transaction>>(results);
+    }
+
     public Task<IReadOnlyList<Transaction>> GetVisibleToUserAsync(
         string householdId,
         string userId,

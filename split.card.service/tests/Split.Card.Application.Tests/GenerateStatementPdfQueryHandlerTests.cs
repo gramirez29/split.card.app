@@ -36,23 +36,25 @@ public class GenerateStatementPdfQueryHandlerTests
         InMemoryCardRepository Cards,
         InMemoryStatementPeriodRepository Periods,
         InMemoryTransactionRepository Transactions,
+        InMemoryInstallmentPlanRepository Plans,
         FakeStatementPdfGenerator PdfGenerator) BuildHandler()
     {
         var users = new InMemoryUserRepository();
         var cards = new InMemoryCardRepository();
         var periods = new InMemoryStatementPeriodRepository();
         var transactions = new InMemoryTransactionRepository();
+        var plans = new InMemoryInstallmentPlanRepository();
         var pdfGenerator = new FakeStatementPdfGenerator();
 
-        var handler = new GenerateStatementPdfQueryHandler(users, cards, periods, transactions, pdfGenerator);
+        var handler = new GenerateStatementPdfQueryHandler(users, cards, periods, transactions, plans, pdfGenerator);
 
-        return (handler, users, cards, periods, transactions, pdfGenerator);
+        return (handler, users, cards, periods, transactions, plans, pdfGenerator);
     }
 
     [Fact]
     public async Task Handle_OwnerSameHousehold_GeneratesPdfWithAllTransactions()
     {
-        var (handler, users, cards, periods, transactions, pdfGenerator) = BuildHandler();
+        var (handler, users, cards, periods, transactions, _, pdfGenerator) = BuildHandler();
 
         users.Seed(OwnerUser("user-1", "household-1"));
         cards.Seed(CreditCard("card-1", "household-1"));
@@ -69,9 +71,32 @@ public class GenerateStatementPdfQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_InstallmentPurchase_UsesPeriodAmountNotFullTotal()
+    {
+        var (handler, users, cards, periods, transactions, plans, pdfGenerator) = BuildHandler();
+
+        users.Seed(OwnerUser("user-1", "household-1"));
+        cards.Seed(CreditCard("card-1", "household-1"));
+        periods.Periods.Add(new StatementPeriod("period-1", "card-1", new DateOnly(2026, 2, 21), new DateOnly(2026, 3, 20), new DateOnly(2026, 4, 5)));
+
+        var plan = InstallmentPlan.CreateForNewPurchase("plan-1", 3, 4000m, Currency.CRC, new DateOnly(2026, 3, 10));
+        plans.Plans.Add(plan);
+        transactions.Transactions.Add(new Transaction(
+            "tx-1", "card-1", "PriceSmart", new DateOnly(2026, 3, 10), 12000m, Currency.CRC, "plan-1", "user-1",
+            [new PersonShare("user-1", 100)]));
+
+        await handler.Handle(new GenerateStatementPdfQuery("card-1", new DateOnly(2026, 3, 15), "user-1"), CancellationToken.None);
+
+        var resolved = Assert.Single(pdfGenerator.LastModel!.Transactions);
+        Assert.Equal(4000m, resolved.PeriodAmount);
+        Assert.Equal(1, resolved.InstallmentNumber);
+        Assert.Equal(3, resolved.TotalInstallments);
+    }
+
+    [Fact]
     public async Task Handle_RestrictedViewer_OnlySeesOwnTransactionsInPdf()
     {
-        var (handler, users, cards, periods, transactions, pdfGenerator) = BuildHandler();
+        var (handler, users, cards, periods, transactions, _, pdfGenerator) = BuildHandler();
 
         users.Seed(RestrictedViewerUser("user-2", "household-1"));
         cards.Seed(CreditCard("card-1", "household-1"));
@@ -86,14 +111,14 @@ public class GenerateStatementPdfQueryHandlerTests
 
         await handler.Handle(new GenerateStatementPdfQuery("card-1", new DateOnly(2026, 3, 15), "user-2"), CancellationToken.None);
 
-        Assert.Single(pdfGenerator.LastModel!.Transactions);
-        Assert.Equal("Cuota fija hija", pdfGenerator.LastModel!.Transactions[0].Merchant);
+        var resolved = Assert.Single(pdfGenerator.LastModel!.Transactions);
+        Assert.Equal("Cuota fija hija", resolved.Transaction.Merchant);
     }
 
     [Fact]
     public async Task Handle_CardBelongsToDifferentHousehold_ThrowsForbidden()
     {
-        var (handler, users, cards, _, _, _) = BuildHandler();
+        var (handler, users, cards, _, _, _, _) = BuildHandler();
 
         users.Seed(OwnerUser("user-1", "household-1"));
         cards.Seed(CreditCard("card-1", "household-2"));
@@ -105,7 +130,7 @@ public class GenerateStatementPdfQueryHandlerTests
     [Fact]
     public async Task Handle_NoStatementPeriodForDate_ThrowsNotFound()
     {
-        var (handler, users, cards, _, _, _) = BuildHandler();
+        var (handler, users, cards, _, _, _, _) = BuildHandler();
 
         users.Seed(OwnerUser("user-1", "household-1"));
         cards.Seed(CreditCard("card-1", "household-1"));
@@ -117,7 +142,7 @@ public class GenerateStatementPdfQueryHandlerTests
     [Fact]
     public async Task Handle_PersonNamesById_ResolvesHouseholdMemberNames()
     {
-        var (handler, users, cards, periods, transactions, pdfGenerator) = BuildHandler();
+        var (handler, users, cards, periods, transactions, _, pdfGenerator) = BuildHandler();
 
         users.Seed(OwnerUser("user-1", "household-1"));
         users.Seed(new User("user-2", "household-1", "María", "maria@test.com", "hash", UserRole.Contributor));
