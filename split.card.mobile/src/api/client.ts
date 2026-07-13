@@ -1,4 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
+// SDK 54 movió la API clásica (cacheDirectory, downloadAsync) fuera del export por
+// default de 'expo-file-system' hacia una API nueva basada en clases File/Directory.
+// El subpath /legacy preserva la API clásica — si Expo llega a quitar este subpath en
+// una versión futura, esta función necesita reescribirse contra File/Paths.
+import * as FileSystem from 'expo-file-system/legacy';
 import { config } from '@/constants/config';
 import type { ApiResult } from '@/types/api';
 
@@ -70,6 +75,38 @@ export async function apiRequest<T>(
   } catch (error) {
     clearTimeout(timeoutId);
     const message = error instanceof Error ? error.message : 'Unknown network error.';
+    return { ok: false, error: { status: 0, message } };
+  }
+}
+
+/**
+ * For binary responses (PDF) — apiRequest<T> always calls response.json(), which fails
+ * on binary content, so this is a separate path. Downloads straight to disk via
+ * FileSystem.downloadAsync (supports custom headers, so the Bearer token attaches the
+ * same way apiRequest does it) and returns the local file:// URI to hand to
+ * expo-sharing afterward.
+ */
+export async function apiDownloadFile(path: string, localFileName: string): Promise<ApiResult<string>> {
+  const token = await getAuthToken();
+
+  if (!token) {
+    return { ok: false, error: { status: 401, message: 'No authentication token found.' } };
+  }
+
+  const localUri = `${FileSystem.cacheDirectory}${localFileName}`;
+
+  try {
+    const result = await FileSystem.downloadAsync(`${config.apiUrl}${path}`, localUri, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (result.status !== 200) {
+      return { ok: false, error: { status: result.status, message: `Download failed with status ${result.status}.` } };
+    }
+
+    return { ok: true, data: result.uri };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error downloading file.';
     return { ok: false, error: { status: 0, message } };
   }
 }

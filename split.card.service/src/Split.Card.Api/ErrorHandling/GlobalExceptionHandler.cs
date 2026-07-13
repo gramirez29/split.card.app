@@ -30,14 +30,24 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
 
         httpContext.Response.StatusCode = statusCode;
 
-        await httpContext.Response.WriteAsJsonAsync(
-            new
-            {
-                title,
-                status = statusCode,
-                detail = exception.Message
-            },
-            cancellationToken);
+        // CancellationToken.None here, not the incoming cancellationToken: if the client
+        // has already disconnected, that token is canceled and WriteAsJsonAsync would throw
+        // OperationCanceledException from inside the exception handler itself, escaping
+        // TryHandleAsync unhandled instead of just skipping a write nobody will receive.
+        try
+        {
+            await httpContext.Response.WriteAsJsonAsync(
+                new
+                {
+                    title,
+                    status = statusCode,
+                    detail = exception.Message
+                },
+                CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+        }
 
         return true;
     }

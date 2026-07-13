@@ -19,6 +19,9 @@ public sealed record RegisterTransactionCommand(
 
 /// <summary>
 /// The core write path of the app: registers a purchase at the moment it happens.
+/// - Rejects if the Card does not belong to the acting user's household (HouseholdAccessGuard) —
+///   without this, any Owner/Contributor could register a transaction against a card that
+///   isn't theirs, just by knowing/guessing its CardId.
 /// - If Installments is provided, creates a single InstallmentPlan (never one Transaction
 ///   per month — GetInstallmentNumberFor resolves which installment is active per period).
 /// - Debit card purchases cannot carry Installments — a debit purchase is settled in cash
@@ -48,6 +51,8 @@ public sealed class RegisterTransactionCommandHandler(
 
         var card = await cardRepository.GetByIdAsync(command.CardId, cancellationToken)
             ?? throw new NotFoundException($"Card {command.CardId} not found.");
+
+        HouseholdAccessGuard.EnsureMember(actingUser, card.HouseholdId);
 
         if (card.Type == CardType.Debit && command.Installments is not null)
         {

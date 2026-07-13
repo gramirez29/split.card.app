@@ -68,13 +68,13 @@ public static class TransactionEndpoints
                 CancellationToken cancellationToken) =>
             {
                 var query = new GetTransactionsForCardPeriodQuery(cardId, date, actingUser.GetUserId());
-                var transactions = await handler.Handle(query, cancellationToken);
+                var resolved = await handler.Handle(query, cancellationToken);
 
-                return Results.Ok(transactions.Select(TransactionResponse.FromDomain).ToList());
+                return Results.Ok(resolved.Select(PeriodTransactionResponse.FromResolved).ToList());
             })
             .WithName("GetTransactionsForCardPeriod")
-            .WithSummary("Lists transactions in the statement period containing `date` for the given card.")
-            .Produces<List<TransactionResponse>>()
+            .WithSummary("Lists transactions in the statement period containing `date` for the given card, with each one's per-period amount (installments show their installment amount, not the full purchase total).")
+            .Produces<List<PeriodTransactionResponse>>()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .RequireAuthorization();
 

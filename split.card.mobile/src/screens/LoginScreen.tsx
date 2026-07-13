@@ -103,6 +103,10 @@ export default function LoginScreen() {
             {isAuthenticating ? 'Ingresando...' : 'Ingresar'}
           </Button>
         </Surface>
+
+        <Button mode="text" onPress={() => router.push('/(auth)/register')} style={styles.registerLink}>
+          ¿No tenés cuenta? Creá tu hogar
+        </Button>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -145,5 +149,8 @@ const styles = StyleSheet.create({
   },
   submitButtonContent: {
     paddingVertical: 6,
+  },
+  registerLink: {
+    marginTop: 16,
   },
 });

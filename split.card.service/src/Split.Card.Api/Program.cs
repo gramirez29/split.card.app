@@ -124,5 +124,8 @@ app.MapUserEndpoints();
 app.MapCardEndpoints();
 app.MapTransactionEndpoints();
 app.MapSplitRuleEndpoints();
+app.MapReconciliationEndpoints();
+app.MapDashboardEndpoints();
+app.MapAlertsEndpoints();
 
 app.Run();

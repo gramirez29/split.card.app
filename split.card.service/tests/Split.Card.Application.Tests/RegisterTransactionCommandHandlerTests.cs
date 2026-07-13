@@ -145,6 +145,22 @@ public class RegisterTransactionCommandHandlerTests
     }
 
     [Fact]
+    public async Task Handle_CardBelongsToDifferentHousehold_ThrowsForbidden()
+    {
+        var (handler, users, cards, _, _, transactions) = BuildHandler();
+        users.Seed(OwnerUser(id: "user-1", householdId: "household-1"));
+        cards.Seed(CreditCard(id: "card-1", householdId: "household-2")); // different household
+
+        var command = new RegisterTransactionCommand(
+            "user-1", "card-1", "Tienda", new DateOnly(2026, 3, 10), 1000, Currency.CRC, null,
+            [new PersonShare("user-1", 100)]);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() => handler.Handle(command, CancellationToken.None));
+
+        Assert.Empty(transactions.Transactions);
+    }
+
+    [Fact]
     public async Task Handle_RestrictedViewerRole_ThrowsForbidden()
     {
         var (handler, users, cards, _, _, _) = BuildHandler();

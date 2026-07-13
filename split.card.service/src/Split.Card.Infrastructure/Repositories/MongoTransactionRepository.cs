@@ -28,6 +28,15 @@ public sealed class MongoTransactionRepository(MongoDbContext context) : ITransa
         return documents.Select(d => d.ToDomain()).ToList();
     }
 
+    public async Task<IReadOnlyList<Transaction>> GetByCardIdAsync(string cardId, CancellationToken cancellationToken)
+    {
+        var documents = await context.Transactions
+            .Find(t => t.CardId == cardId)
+            .ToListAsync(cancellationToken);
+
+        return documents.Select(d => d.ToDomain()).ToList();
+    }
+
     public async Task<IReadOnlyList<Transaction>> GetVisibleToUserAsync(
         string householdId,
         string userId,
