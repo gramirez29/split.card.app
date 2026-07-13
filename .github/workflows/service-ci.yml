@@ -45,4 +45,15 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service "${{ vars.RAILWAY_SERVICE_NAME }}" --detach --ci
+          RAILWAY_SERVICE_NAME: ${{ vars.RAILWAY_SERVICE_NAME }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN is not configured for the develop environment. Skipping deploy."
+            exit 0
+          fi
+
+          if [ -n "$RAILWAY_SERVICE_NAME" ]; then
+            railway up --service "$RAILWAY_SERVICE_NAME" --detach --ci
+          else
+            railway up --detach --ci
+          fi
