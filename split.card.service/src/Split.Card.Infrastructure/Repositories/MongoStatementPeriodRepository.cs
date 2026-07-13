@@ -17,7 +17,7 @@ public sealed class MongoStatementPeriodRepository(MongoDbContext context) : ISt
     public async Task<StatementPeriod?> GetByCardAndDateAsync(string cardId, DateOnly date, CancellationToken cancellationToken)
     {
         var document = await context.StatementPeriods
-            .Find(p => p.CardId == cardId && p.StartDate <= date && p.EndDate >= date)
+            .Find(p => p.CardId == cardId && date >= p.StartDate && date <= p.EndDate)
             .FirstOrDefaultAsync(cancellationToken);
 
         return document?.ToDomain();

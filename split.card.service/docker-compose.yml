@@ -1,0 +1,15 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: split-card-mongo
+    restart: unless-stopped
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: splitcard
+      MONGO_INITDB_ROOT_PASSWORD: splitcard_dev_only
+    volumes:
+      - split-card-mongo-data:/data/db
+
+volumes:
+  split-card-mongo-data:

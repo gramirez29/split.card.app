@@ -10,6 +10,10 @@ on:
       - "split.card.service/**"
       - ".github/workflows/service-ci.yml"
 
+concurrency:
+  group: split.card.service-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -24,3 +28,21 @@ jobs:
       - run: dotnet restore
       - run: dotnet build --no-restore --configuration Release
       - run: dotnet test --no-build --configuration Release
+
+  deploy:
+    name: Deploy to Railway
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    environment: develop
+    defaults:
+      run:
+        working-directory: split.card.service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service "${{ vars.RAILWAY_SERVICE_NAME }}" --detach --ci
