@@ -1,0 +1,11 @@
+**/bin/
+**/obj/
+tests/
+.env
+.env.*
+!.env.example
+.vs/
+.vscode/
+.git/
+*.md
+docker-compose.yml

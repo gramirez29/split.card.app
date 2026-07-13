@@ -43,6 +43,7 @@ public sealed class QuestPdfStatementGenerator : IStatementPdfGenerator
                         columns.RelativeColumn(3);
                         columns.RelativeColumn(2);
                         columns.RelativeColumn(2);
+                        columns.RelativeColumn(2);
                         columns.RelativeColumn(4);
                     });
 
@@ -50,12 +51,15 @@ public sealed class QuestPdfStatementGenerator : IStatementPdfGenerator
                     {
                         header.Cell().Text("Merchant").Bold();
                         header.Cell().Text("Date").Bold();
+                        header.Cell().Text("Installment").Bold();
                         header.Cell().Text("Amount").Bold();
                         header.Cell().Text("Split").Bold();
                     });
 
-                    foreach (var transaction in model.Transactions.OrderBy(t => t.PurchaseDate))
+                    foreach (var resolved in model.Transactions.OrderBy(r => r.Transaction.PurchaseDate))
                     {
+                        var transaction = resolved.Transaction;
+
                         var splitDescription = string.Join(
                             ", ",
                             transaction.Split.Select(share =>
@@ -64,9 +68,16 @@ public sealed class QuestPdfStatementGenerator : IStatementPdfGenerator
                                 return $"{personName}: {share.Percentage}%";
                             }));
 
+                        var installmentLabel = resolved.InstallmentNumber is not null && resolved.TotalInstallments is not null
+                            ? $"{resolved.InstallmentNumber}/{resolved.TotalInstallments}"
+                            : "—";
+
                         table.Cell().Text(transaction.Merchant);
                         table.Cell().Text(transaction.PurchaseDate.ToString("yyyy-MM-dd"));
-                        table.Cell().Text(FormatAmount(transaction.Amount, transaction.Currency));
+                        table.Cell().Text(installmentLabel);
+                        // PeriodAmount, not transaction.Amount: for an installment purchase this
+                        // is the amount due THIS period, not the full original purchase total.
+                        table.Cell().Text(FormatAmount(resolved.PeriodAmount, transaction.Currency));
                         table.Cell().Text(splitDescription);
                     }
                 });
@@ -74,8 +85,8 @@ public sealed class QuestPdfStatementGenerator : IStatementPdfGenerator
                 page.Footer().Column(column =>
                 {
                     var totalsByCurrency = model.Transactions
-                        .GroupBy(t => t.Currency)
-                        .Select(group => FormatAmount(group.Sum(t => t.Amount), group.Key));
+                        .GroupBy(r => r.Transaction.Currency)
+                        .Select(group => FormatAmount(group.Sum(r => r.PeriodAmount), group.Key));
 
                     column.Item().AlignRight().Text($"Total: {string.Join("  +  ", totalsByCurrency)}").Bold();
                 });

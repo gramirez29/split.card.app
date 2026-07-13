@@ -52,3 +52,44 @@ public sealed record TransactionResponse(
             transaction.CreatedByUserId,
             transaction.Split.Select(PersonShareResponse.FromDomain).ToList());
 }
+
+/// <summary>
+/// Used only by period-scoped endpoints (GET .../cards/{cardId}/transactions). Unlike
+/// TransactionResponse, `amount` here stays the full original purchase total for context,
+/// but `periodAmount` is what's actually due THIS period — for a non-installment purchase
+/// they're the same value; for an installment purchase they are NOT, and periodAmount is
+/// the one that should be shown/summed by any UI rendering "what's owed this period".
+/// </summary>
+public sealed record PeriodTransactionResponse(
+    string Id,
+    string CardId,
+    string Merchant,
+    DateOnly PurchaseDate,
+    decimal Amount,
+    decimal PeriodAmount,
+    Currency Currency,
+    string? InstallmentPlanId,
+    int? InstallmentNumber,
+    int? TotalInstallments,
+    string CreatedByUserId,
+    IReadOnlyList<PersonShareResponse> Split)
+{
+    public static PeriodTransactionResponse FromResolved(ResolvedPeriodTransaction resolved)
+    {
+        var transaction = resolved.Transaction;
+
+        return new PeriodTransactionResponse(
+            transaction.Id,
+            transaction.CardId,
+            transaction.Merchant,
+            transaction.PurchaseDate,
+            transaction.Amount,
+            resolved.PeriodAmount,
+            transaction.Currency,
+            transaction.InstallmentPlanId,
+            resolved.InstallmentNumber,
+            resolved.TotalInstallments,
+            transaction.CreatedByUserId,
+            transaction.Split.Select(PersonShareResponse.FromDomain).ToList());
+    }
+}
