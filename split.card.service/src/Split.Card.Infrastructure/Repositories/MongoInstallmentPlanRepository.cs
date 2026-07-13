@@ -17,7 +17,7 @@ public sealed class MongoInstallmentPlanRepository(MongoDbContext context) : IIn
     /// <summary>
     /// Adds a new installment plan to the database.
     /// </summary>
-    /// <param name="installmentPlan">The installment plan to add.</param>
+    /// <param name="installmentPlan">The installment plan to add in the database.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     public async Task AddAsync(InstallmentPlan installmentPlan, CancellationToken cancellationToken)
