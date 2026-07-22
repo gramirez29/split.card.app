@@ -62,6 +62,12 @@ public sealed class RegisterTransactionCommandHandler(
 
         string? installmentPlanId = null;
 
+        // Computed once and reused below: the installment plan's anchor must be this same
+        // period's EndDate, not the raw purchase date (see InstallmentPlan.FirstChargeDate).
+        var statementPeriodRange = card.Type == CardType.Credit
+            ? card.GetStatementPeriodFor(command.PurchaseDate)
+            : null;
+
         if (command.Installments is not null)
         {
             var plan = InstallmentPlan.CreateForNewPurchase(
@@ -69,7 +75,7 @@ public sealed class RegisterTransactionCommandHandler(
                 command.Installments.TotalInstallments,
                 command.Installments.InstallmentAmount,
                 command.Currency,
-                command.PurchaseDate);
+                statementPeriodRange!.EndDate);
 
             await installmentPlanRepository.AddAsync(plan, cancellationToken);
             installmentPlanId = plan.Id;
@@ -77,7 +83,7 @@ public sealed class RegisterTransactionCommandHandler(
 
         if (card.Type == CardType.Credit)
         {
-            await EnsureStatementPeriodExists(card, command.PurchaseDate, cancellationToken);
+            await EnsureStatementPeriodExists(card, command.PurchaseDate, statementPeriodRange!, cancellationToken);
         }
 
         var transaction = new Transaction(
@@ -96,7 +102,8 @@ public sealed class RegisterTransactionCommandHandler(
         return transaction;
     }
 
-    private async Task EnsureStatementPeriodExists(Card card, DateOnly purchaseDate, CancellationToken cancellationToken)
+    private async Task EnsureStatementPeriodExists(
+        Card card, DateOnly purchaseDate, StatementPeriodRange range, CancellationToken cancellationToken)
     {
         var existingPeriod = await statementPeriodRepository.GetByCardAndDateAsync(card.Id, purchaseDate, cancellationToken);
 
@@ -105,7 +112,6 @@ public sealed class RegisterTransactionCommandHandler(
             return;
         }
 
-        var range = card.GetStatementPeriodFor(purchaseDate);
         var period = new StatementPeriod(IdGenerator.NewId(), card.Id, range.StartDate, range.EndDate, range.PaymentDueDate);
 
         await statementPeriodRepository.AddAsync(period, cancellationToken);
