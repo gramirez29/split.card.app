@@ -9,6 +9,16 @@ public sealed class InstallmentPlan : Entity
     public int TotalInstallments { get; private set; }
     public decimal InstallmentAmount { get; private set; }
     public Currency Currency { get; private set; }
+
+    /// <summary>
+    /// NOT the raw purchase date — the EndDate of the statement period the purchase was first
+    /// billed in (see Card.GetStatementPeriodFor). GetInstallmentNumberFor compares this against
+    /// another period's EndDate via calendar-month arithmetic, so both sides must be the same
+    /// kind of date (a cutoff-day-aligned period end), or the comparison misaligns whenever a
+    /// purchase happens after the card's cutoff day — its period EndDate lands in the *next*
+    /// calendar month while the raw purchase date doesn't, over-counting the installment number
+    /// by one for the entire life of the plan. Passing the raw purchase date here was the bug.
+    /// </summary>
     public DateOnly FirstChargeDate { get; private set; }
 
     private InstallmentPlan()
@@ -36,15 +46,18 @@ public sealed class InstallmentPlan : Entity
 
     /// <summary>
     /// Used when the user registers a brand-new purchase in installments at the moment of purchase.
+    /// <paramref name="firstStatementPeriodEndDate"/> must be the EndDate of the statement period
+    /// the purchase belongs to (Card.GetStatementPeriodFor(purchaseDate).EndDate) — NOT the raw
+    /// purchase date. See the FirstChargeDate doc comment for why.
     /// </summary>
     public static InstallmentPlan CreateForNewPurchase(
         string id,
         int totalInstallments,
         decimal installmentAmount,
         Currency currency,
-        DateOnly purchaseDate)
+        DateOnly firstStatementPeriodEndDate)
     {
-        return new InstallmentPlan(id, totalInstallments, installmentAmount, currency, purchaseDate);
+        return new InstallmentPlan(id, totalInstallments, installmentAmount, currency, firstStatementPeriodEndDate);
     }
 
     /// <summary>

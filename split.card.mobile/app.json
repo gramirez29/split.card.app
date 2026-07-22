@@ -10,7 +10,8 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "ios": {
       "supportsTablet": false,
@@ -18,6 +19,13 @@
     },
     "android": {
       "package": "com.splitcard.mobile"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "62a9333e-2910-4f1e-b69e-757d910cdd0b"
+      }
+    },
+    "owner": "g.raba29-dev"
   }
 }

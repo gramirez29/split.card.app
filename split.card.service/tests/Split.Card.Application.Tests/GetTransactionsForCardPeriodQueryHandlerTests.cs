@@ -102,6 +102,39 @@ public class GetTransactionsForCardPeriodQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_InstallmentPurchaseAfterCutoffDay_ShowsInstallmentOneInCurrentPeriod()
+    {
+        // Bug reportado: compra a 6 cuotas hecha DESPUÉS del día de corte de la tarjeta —
+        // el periodo que la contiene termina en el mes SIGUIENTE al de la compra (cutoff
+        // day 20, compra el 25 -> periodo Mar21-Abr20). Antes del fix, InstallmentPlan
+        // anclaba en la fecha de compra cruda (marzo) y comparaba contra el EndDate del
+        // periodo (abril), contando un mes de más -> mostraba cuota 2/6 en vez de 1/6.
+        var (handler, users, cards, periods, transactions, plans) = BuildHandler();
+
+        users.Seed(OwnerUser("user-1", "household-1"));
+        cards.Seed(CreditCard("card-1", "household-1")); // cutoffDay = 20
+
+        var plan = InstallmentPlan.CreateForNewPurchase(
+            "plan-1", totalInstallments: 6, installmentAmount: 2000m, Currency.CRC,
+            firstStatementPeriodEndDate: new DateOnly(2026, 4, 20));
+        plans.Plans.Add(plan);
+
+        transactions.Transactions.Add(new Transaction(
+            "tx-1", "card-1", "Tienda", new DateOnly(2026, 3, 25), 12000m, Currency.CRC, "plan-1", "user-1",
+            [new PersonShare("user-1", 100)]));
+
+        periods.Periods.Add(new StatementPeriod("period-1", "card-1", new DateOnly(2026, 3, 21), new DateOnly(2026, 4, 20), new DateOnly(2026, 5, 5)));
+
+        var result = await handler.Handle(
+            new GetTransactionsForCardPeriodQuery("card-1", new DateOnly(2026, 4, 1), "user-1"),
+            CancellationToken.None);
+
+        var resolved = Assert.Single(result);
+        Assert.Equal(1, resolved.InstallmentNumber);
+        Assert.Equal(6, resolved.TotalInstallments);
+    }
+
+    [Fact]
     public async Task Handle_CardBelongsToDifferentHousehold_ThrowsForbidden()
     {
         var (handler, users, cards, _, _, _) = BuildHandler();
